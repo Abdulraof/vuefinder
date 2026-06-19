@@ -6,10 +6,14 @@ import type {
   FileOperationResult,
   FileContentResult,
   ArchiveParams,
+  UnarchiveParams,
   SaveParams,
   RenameParams,
   TransferParams,
   UploaderContext,
+  ListParams,
+  SearchParams,
+  GetContentParams,
 } from './types';
 import type { DirEntry, FsData } from '../types';
 
@@ -212,7 +216,7 @@ export class IndexedDBDriver extends BaseAdapter {
     await this.readyPromise;
   }
 
-  async list(params?: { path?: string }): Promise<FsData> {
+  async list(params?: ListParams): Promise<FsData> {
     await this.ensureReady();
     return this.driver.list(params);
   }
@@ -252,7 +256,7 @@ export class IndexedDBDriver extends BaseAdapter {
     return result;
   }
 
-  async unarchive(params: { item: string; path: string }): Promise<FileOperationResult> {
+  async unarchive(params: UnarchiveParams): Promise<FileOperationResult> {
     await this.ensureReady();
     const result = await this.driver.unarchive(params);
     await this.persistSnapshot();
@@ -277,7 +281,7 @@ export class IndexedDBDriver extends BaseAdapter {
     return this.driver.getPreviewUrl(params);
   }
 
-  async getContent(params: { path: string }): Promise<FileContentResult> {
+  async getContent(params: GetContentParams): Promise<FileContentResult> {
     await this.ensureReady();
     return this.driver.getContent(params);
   }
@@ -286,12 +290,7 @@ export class IndexedDBDriver extends BaseAdapter {
     return this.driver.getDownloadUrl(params);
   }
 
-  async search(params: {
-    path?: string;
-    filter: string;
-    deep?: boolean;
-    size?: 'all' | 'small' | 'medium' | 'large';
-  }): Promise<DirEntry[]> {
+  async search(params: SearchParams): Promise<DirEntry[]> {
     await this.ensureReady();
     return this.driver.search(params);
   }

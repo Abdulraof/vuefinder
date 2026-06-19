@@ -18,9 +18,8 @@ import ModalPreview from './modals/ModalPreview.vue';
 import ModalSearch from './modals/ModalSearch.vue';
 import ModalSettings from './modals/ModalSettings.vue';
 import ModalShortcuts from './modals/ModalShortcuts.vue';
+import ModalGoToFolder from './modals/ModalGoToFolder.vue';
 import { useApp } from '../composables/useApp';
-import { getErrorMessage } from '../utils/errorHandler';
-import { createNotifier } from '../utils/notify';
 import { format as filesizeDefault, metricFormat as filesizeMetric } from '../utils/filesize';
 import { inject } from 'vue';
 
@@ -28,7 +27,6 @@ import type { StoreValue } from 'nanostores';
 import type { ConfigState } from '../stores/config';
 
 const app = useApp();
-const notify = createNotifier(app);
 const { enabled } = useFeature();
 
 const { t } = app?.i18n || { t: (key: string) => key };
@@ -126,6 +124,38 @@ const menuItems = computed<any[]>(() => [
             });
           }
         },
+        enabled: () => selectedItems.value.length === 1 && selectedItems.value[0]?.type !== 'dir',
+        hidden: () => !enabled('preview'),
+      },
+      {
+        id: 'open-as',
+        label: t('Preview as'),
+        items: [
+          {
+            id: 'open-as-text',
+            label: t('Text'),
+            action: () =>
+              app?.modal?.open(ModalPreview, {
+                storage: fs?.path?.get()?.storage,
+                item: selectedItems.value[0],
+                forceType: 'text',
+              }),
+            enabled: () =>
+              selectedItems.value.length === 1 && selectedItems.value[0]?.type !== 'dir',
+          },
+          {
+            id: 'open-as-image',
+            label: t('Image'),
+            action: () =>
+              app?.modal?.open(ModalPreview, {
+                storage: fs?.path?.get()?.storage,
+                item: selectedItems.value[0],
+                forceType: 'image',
+              }),
+            enabled: () =>
+              selectedItems.value.length === 1 && selectedItems.value[0]?.type !== 'dir',
+          },
+        ],
         enabled: () => selectedItems.value.length === 1 && selectedItems.value[0]?.type !== 'dir',
         hidden: () => !enabled('preview'),
       },
@@ -446,38 +476,7 @@ const menuItems = computed<any[]>(() => [
       {
         id: 'go-to-folder',
         label: t('Go to Folder'),
-        action: async () => {
-          const folderPath = prompt(t('Enter folder path:'));
-          if (folderPath) {
-            // Validate path format: must be storage://path/to/folder
-            if (!folderPath.includes('://')) {
-              alert(t('Invalid path format. Path must be in format: storage://path/to/folder'));
-              return;
-            }
-
-            // Extract storage name from path
-            const storageIndex = folderPath.indexOf('://');
-            const storageName = folderPath.slice(0, storageIndex);
-
-            // Validate that storage exists in storages list
-            if (!storages.value || !storages.value.includes(storageName)) {
-              alert(t('Invalid storage. Storage "%s" is not available.', storageName));
-              return;
-            }
-
-            // Path is valid, try to navigate
-            // Use adapter.open() instead of setPath + list
-            // adapter.open() will only update path if successful (via onAfterOpen callback)
-            try {
-              await app?.adapter.open(folderPath);
-            } catch (error: unknown) {
-              // If error occurs, path won't be updated (onAfterOpen won't be called)
-              const errorMessage = getErrorMessage(error, t('Failed to navigate to folder'));
-              notify.error(errorMessage);
-              app.fs.setLoading(false);
-            }
-          }
-        },
+        action: () => app?.modal?.open(ModalGoToFolder),
         enabled: () => true,
       },
     ],
@@ -586,9 +585,10 @@ onUnmounted(() => {
               'vuefinder__menubar__dropdown__item--disabled': item.enabled && !item.enabled(),
               'vuefinder__menubar__dropdown__item--checked': item.checked && item.checked(),
               'vuefinder__menubar__dropdown__item--hidden': item.hidden && item.hidden(),
+              'vuefinder__menubar__dropdown__item--has-children': item.items?.length,
             }"
             @click.stop="
-              item.type !== 'separator' && item.enabled && item.enabled()
+              item.type !== 'separator' && !item.items?.length && (!item.enabled || item.enabled())
                 ? handleMenuAction(item.action)
                 : null
             "
@@ -602,6 +602,30 @@ onUnmounted(() => {
             >
               ✓
             </span>
+            <svg
+              v-if="item.items?.length"
+              class="vuefinder__menubar__dropdown__chevron"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M6 4l4 4-4 4z" />
+            </svg>
+            <div v-if="item.items?.length" class="vuefinder__menubar__dropdown__submenu">
+              <div
+                v-for="child in item.items"
+                :key="child.id"
+                class="vuefinder__menubar__dropdown__item"
+                :class="{
+                  'vuefinder__menubar__dropdown__item--disabled': child.enabled && !child.enabled(),
+                }"
+                @click.stop="
+                  !child.enabled || child.enabled() ? handleMenuAction(child.action) : null
+                "
+              >
+                <span class="vuefinder__menubar__dropdown__label">{{ child.label }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

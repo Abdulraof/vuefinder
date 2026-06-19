@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/vue-query';
+import { QueryClient, isCancelledError } from '@tanstack/vue-query';
 import type {
   Driver,
   DeleteResult,
@@ -6,6 +6,7 @@ import type {
   FileContentResult,
   DeleteParams,
   ArchiveParams,
+  UnarchiveParams,
   SaveParams,
   RenameParams,
   TransferParams,
@@ -130,10 +131,11 @@ export class AdapterManager {
   async list(path?: string): Promise<FsData> {
     const queryKey = QueryKeys.list(path);
 
-    // Use fetchQuery from TanStack Query
+    // Use fetchQuery from TanStack Query.
+    // Forward the TanStack-provided signal so query cancellation aborts the underlying fetch.
     return await this.queryClient.fetchQuery({
       queryKey,
-      queryFn: () => this.driver.list({ path }),
+      queryFn: ({ signal }) => this.driver.list({ path, signal }),
       staleTime: this.config.staleTime,
     });
   }
@@ -143,18 +145,33 @@ export class AdapterManager {
    * @param path
    * @returns
    */
-  async open(path?: string): Promise<FsData> {
+  async open(path?: string): Promise<FsData | undefined> {
     if (this.onBeforeOpen) {
       this.onBeforeOpen();
     }
-    const data = await this.list(path);
-
-    // Update state if callback is provided
-    if (this.onAfterOpen) {
-      this.onAfterOpen(data);
+    try {
+      const data = await this.list(path);
+      if (this.onAfterOpen) {
+        this.onAfterOpen(data);
+      }
+      return data;
+    } catch (err) {
+      // User-initiated cancel via cancelOpen(): the loading state is
+      // reset by the caller that triggered the cancel; suppress here.
+      if (isCancelledError(err) || (err as Error)?.name === 'AbortError') {
+        return undefined;
+      }
+      throw err;
     }
+  }
 
-    return data;
+  /**
+   * Cancel an in-flight list/open request. Aborts the underlying fetch via
+   * the AbortSignal that TanStack Query passes to the query function.
+   */
+  cancelOpen(path?: string): void {
+    const queryKey = path === undefined ? ['adapter', 'list'] : QueryKeys.list(path);
+    void this.queryClient.cancelQueries({ queryKey });
   }
 
   /**
@@ -220,7 +237,7 @@ export class AdapterManager {
   /**
    * Extract files from a zip archive
    */
-  async unarchive(params: { item: string; path: string }): Promise<FileOperationResult> {
+  async unarchive(params: UnarchiveParams): Promise<FileOperationResult> {
     const result = await this.driver.unarchive(params);
 
     // Invalidate list queries
@@ -256,13 +273,15 @@ export class AdapterManager {
   /**
    * Get file content (cached)
    */
-  async getContent(params: { path: string }): Promise<FileContentResult> {
+  async getContent(params: { path: string; signal?: AbortSignal }): Promise<FileContentResult> {
     const queryKey = ['adapter', 'content', params.path] as const;
 
-    // Use fetchQuery from TanStack Query
+    // Use fetchQuery from TanStack Query.
+    // Prefer caller-provided signal; otherwise rely on TanStack's signal.
     return await this.queryClient.fetchQuery({
       queryKey,
-      queryFn: () => this.driver.getContent(params),
+      queryFn: ({ signal }) =>
+        this.driver.getContent({ path: params.path, signal: params.signal ?? signal }),
       staleTime: this.config.staleTime,
     });
   }
@@ -289,11 +308,13 @@ export class AdapterManager {
     filter: string;
     deep?: boolean;
     size?: 'all' | 'small' | 'medium' | 'large';
+    signal?: AbortSignal;
   }): Promise<import('../types').DirEntry[]> {
     const key = QueryKeys.search(params.path, params.filter, params.deep, params.size);
+    // Forward the caller-provided signal when present, otherwise rely on TanStack's signal.
     return await this.queryClient.fetchQuery({
       queryKey: key,
-      queryFn: () => this.driver.search(params),
+      queryFn: ({ signal }) => this.driver.search({ ...params, signal: params.signal ?? signal }),
       staleTime: this.config.staleTime,
     });
   }

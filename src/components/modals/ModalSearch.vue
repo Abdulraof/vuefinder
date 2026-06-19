@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useStore } from '@nanostores/vue';
 import { inject } from 'vue';
 import { useApp } from '../../composables/useApp';
@@ -13,13 +13,14 @@ import ModalHeader from './ModalHeader.vue';
 import ModalPreview from './ModalPreview.vue';
 import ModalTreeSelector from './ModalTreeSelector.vue';
 import SearchInput from '../search/SearchInput.vue';
-import SearchOptionsDropdown from '../search/SearchOptionsDropdown.vue';
+import SearchOptionsDropdown, { type SortOption } from '../search/SearchOptionsDropdown.vue';
 import SearchResultsList from '../search/SearchResultsList.vue';
 import type { DirEntry } from '../../types';
 import type { StoreValue } from 'nanostores';
 import type { CurrentPathState } from '../../stores/files';
 import { shortenPath } from '../../utils/path';
 import { copyPath } from '../../utils/clipboard';
+import { compareValues } from '../../stores/files';
 
 defineOptions({ name: 'ModalSearch' });
 
@@ -37,12 +38,33 @@ const searchResults = ref<DirEntry[]>([]);
 const isSearching = ref(false);
 const selectedIndex = ref(-1);
 
+// Controller for the most recent in-flight search. When a new search starts,
+// the previous controller is aborted so its (potentially stale) response is dropped.
+let searchAbortController: AbortController | null = null;
+
 // Advanced search state
 const showDropdown = ref(false);
 const showFolderSelector = ref(false);
 const targetFolderEntry = ref<DirEntry | null>(null);
 const sizeFilter = ref<'all' | 'small' | 'medium' | 'large'>('all');
 const deepSearch = ref(false);
+const sortBy = ref<SortOption>('name-asc');
+
+const SORT_COLUMNS: Record<SortOption, { column: keyof DirEntry; direction: 1 | -1 }> = {
+  'name-asc': { column: 'basename', direction: 1 },
+  'name-desc': { column: 'basename', direction: -1 },
+  'size-asc': { column: 'file_size', direction: 1 },
+  'size-desc': { column: 'file_size', direction: -1 },
+  'date-asc': { column: 'last_modified', direction: 1 },
+  'date-desc': { column: 'last_modified', direction: -1 },
+};
+
+const sortedSearchResults = computed(() => {
+  const { column, direction } = SORT_COLUMNS[sortBy.value];
+  return searchResults.value
+    .slice()
+    .sort((a, b) => compareValues(a[column], b[column]) * direction);
+});
 
 // Dropdown selection state
 const selectedDropdownOption = ref<string | null>(`size-${sizeFilter.value}`);
@@ -101,6 +123,22 @@ const previewItem = (item: DirEntry) => {
   closeAllDropdowns();
 };
 
+// Navigate into a folder result and close the search modal.
+const openItem = (item: DirEntry) => {
+  app.adapter.open(item.path);
+  app.modal.close();
+  closeAllDropdowns();
+};
+
+// Double-click / Enter on a result: folders navigate, files preview.
+const activateItem = (item: DirEntry) => {
+  if (item.type === 'dir') {
+    openItem(item);
+  } else {
+    previewItem(item);
+  }
+};
+
 const selectResultItem = (index: number) => {
   selectedIndex.value = index;
   closeAllDropdowns(); // Close any open dropdowns when selecting a new item
@@ -122,6 +160,11 @@ watch(query, async (newQuery) => {
     await performSearch(newQuery.trim());
     selectedIndex.value = 0;
   } else {
+    // Cancel any in-flight request so its response cannot repopulate cleared results.
+    if (searchAbortController) {
+      searchAbortController.abort();
+      searchAbortController = null;
+    }
     searchResults.value = [];
     isSearching.value = false;
     selectedIndex.value = -1;
@@ -148,9 +191,25 @@ watch(deepSearch, async () => {
   }
 });
 
+// Detect aborted requests so we don't show "Search failed" for cancellations
+// triggered by rapid input changes.
+const isAbortError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+  const name = (error as { name?: unknown }).name;
+  return name === 'AbortError' || name === 'CanceledError';
+};
+
 // Perform search
 const performSearch = async (searchQuery: string) => {
   if (!searchQuery) return;
+
+  // Cancel any in-flight request so a stale response cannot overwrite the
+  // results for the current query.
+  if (searchAbortController) {
+    searchAbortController.abort();
+  }
+  const controller = new AbortController();
+  searchAbortController = controller;
 
   isSearching.value = true;
 
@@ -161,10 +220,15 @@ const performSearch = async (searchQuery: string) => {
       filter: searchQuery,
       deep: deepSearch.value,
       size: sizeFilter.value,
+      signal: controller.signal,
     });
+    // Guard against a late resolution after a newer search started.
+    if (controller.signal.aborted) return;
     searchResults.value = files || [];
     isSearching.value = false;
   } catch (error: unknown) {
+    // Silently ignore aborts caused by superseding searches.
+    if (isAbortError(error) || controller.signal.aborted) return;
     notify.error(getErrorMessage(error, t('Search failed')));
     searchResults.value = [];
     isSearching.value = false;
@@ -222,6 +286,12 @@ const handleFolderSelect = (entry: DirEntry | null) => {
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside);
+
+  // Abort any in-flight search when the modal unmounts.
+  if (searchAbortController) {
+    searchAbortController.abort();
+    searchAbortController = null;
+  }
 
   // Cleanup child components
   if (searchOptionsDropdownRef.value) {
@@ -282,6 +352,7 @@ const handleClickOutside = (event: MouseEvent) => {
             v-model:visible="showDropdown"
             v-model:size-filter="sizeFilter"
             v-model:selected-option="selectedDropdownOption"
+            v-model:sort-by="sortBy"
             :disabled="showFolderSelector"
           />
         </div>
@@ -350,7 +421,7 @@ const handleClickOutside = (event: MouseEvent) => {
         <SearchResultsList
           v-if="query.trim() && !showFolderSelector"
           ref="searchResultsListRef"
-          :search-results="searchResults"
+          :search-results="sortedSearchResults"
           :is-searching="isSearching"
           :selected-index="selectedIndex"
           :expanded-paths="expandedPaths"
@@ -364,7 +435,9 @@ const handleClickOutside = (event: MouseEvent) => {
           @update:selected-item-dropdown-option="selectedItemDropdownOption = $event"
           @copy-path="copyItemPath"
           @open-containing-folder="openContainingFolder"
+          @open="openItem"
           @preview="previewItem"
+          @activate="activateItem"
         />
       </div>
     </div>

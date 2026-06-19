@@ -6,6 +6,9 @@ hero:
   name: 'VueFinder'
   text: 'Vue File Manager'
   tagline: A sleek, developer-friendly file manager
+  image:
+    src: /logo.svg
+    alt: VueFinder logo
   actions:
     - theme: brand
       text: Get Started
@@ -23,7 +26,7 @@ features:
   - title: 🎨 Beautiful Modern Interface
     details: Polished UI with context menus, breadcrumbs, thumbnails, and responsive design that works perfectly on desktop and mobile.
   - title: ⚡ Developer-Friendly
-    details: TypeScript support, 17 languages, 12 themes, flexible configuration, and easy backend integration. Built for Vue 3.
+    details: TypeScript support, 18 languages, 12 themes, flexible configuration, and easy backend integration. Built for Vue 3.
 ---
 
 <ClientOnly>

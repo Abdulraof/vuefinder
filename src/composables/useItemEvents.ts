@@ -53,8 +53,17 @@ export function useItemEvents(
     const { key, item } = result;
     const mouse = event as MouseEvent | null;
 
-    // Block selection if not selectable per filters
+    // Item fails the selection filter. If it is still interactive (e.g. a
+    // folder while filterType='files' — dblclick navigates into it), treat
+    // the click as "clicked outside the selection": clear the current set
+    // without adding this item. Truly inert items (a file blocked by the
+    // filter) just no-op.
     if (!canSelectItem(item)) {
+      if (item?.type === 'dir') {
+        fs.clearSelection();
+        selectionObject.value?.clearSelection(true, true);
+        fs.setSelectedCount(0);
+      }
       return;
     }
 
@@ -87,12 +96,12 @@ export function useItemEvents(
 
     const { item } = result;
 
-    // Block open if not selectable
-    if (!canSelectItem(item)) return;
+    if (!item) return;
 
-    if (item) {
-      openItem(item, onFileDclick, onFolderDclick);
-    }
+    // Selection filters should not block folder navigation
+    if (item.type === 'file' && !canSelectItem(item)) return;
+
+    openItem(item, onFileDclick, onFolderDclick);
   };
 
   /**

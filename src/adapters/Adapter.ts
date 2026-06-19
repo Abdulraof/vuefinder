@@ -5,9 +5,13 @@ import type {
   FileContentResult,
   DeleteParams,
   ArchiveParams,
+  UnarchiveParams,
   SaveParams,
   RenameParams,
   TransferParams,
+  ListParams,
+  SearchParams,
+  GetContentParams,
 } from './types';
 import type { DirEntry, FsData } from '../types';
 
@@ -64,7 +68,7 @@ export abstract class BaseAdapter implements Driver {
   /**
    * List files and folders at a given path
    */
-  abstract list(params?: { path?: string }): Promise<FsData>;
+  abstract list(params?: ListParams): Promise<FsData>;
 
   /**
    * Delete files/folders
@@ -94,7 +98,7 @@ export abstract class BaseAdapter implements Driver {
   /**
    * Extract files from a zip archive
    */
-  abstract unarchive(params: { item: string; path: string }): Promise<FileOperationResult>;
+  abstract unarchive(params: UnarchiveParams): Promise<FileOperationResult>;
 
   /**
    * Create a new file
@@ -114,7 +118,7 @@ export abstract class BaseAdapter implements Driver {
   /**
    * Get file content
    */
-  abstract getContent(params: { path: string }): Promise<FileContentResult>;
+  abstract getContent(params: GetContentParams): Promise<FileContentResult>;
 
   /**
    * Get download URL for a file
@@ -124,12 +128,7 @@ export abstract class BaseAdapter implements Driver {
   /**
    * Search files
    */
-  abstract search(params: {
-    path?: string;
-    filter: string;
-    deep?: boolean;
-    size?: 'all' | 'small' | 'medium' | 'large';
-  }): Promise<DirEntry[]>;
+  abstract search(params: SearchParams): Promise<DirEntry[]>;
 
   /**
    * Save content to file

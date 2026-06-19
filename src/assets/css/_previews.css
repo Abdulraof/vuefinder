@@ -42,6 +42,28 @@
   @apply ml-auto flex items-center;
 }
 
+.vuefinder__image-preview__zoom-controls {
+  @apply pointer-events-auto absolute right-2 bottom-2 z-10 flex items-center gap-0.5 rounded-md bg-(--vf-bg-secondary)/85 p-0.5 text-(--vf-text-primary) shadow-sm backdrop-blur-sm;
+}
+
+.vuefinder__image-preview__zoom-button,
+.vuefinder__image-preview__zoom-reset {
+  @apply flex h-7 min-w-7 items-center justify-center rounded px-1.5 text-xs font-medium text-(--vf-text-primary) transition-colors;
+}
+
+.vuefinder__image-preview__zoom-button:hover,
+.vuefinder__image-preview__zoom-reset:hover {
+  @apply bg-(--vf-bg-tertiary);
+}
+
+.vuefinder__image-preview__zoom-button svg {
+  @apply h-4 w-4;
+}
+
+.vuefinder__image-preview__stage {
+  @apply relative;
+}
+
 .vuefinder__themer .vuefinder__image-preview__crop-button {
   @apply ml-1 rounded border border-transparent px-2 py-1 text-base font-medium shadow-sm sm:ml-3 sm:w-auto sm:text-sm;
   @apply bg-(--vf-accent-primary) text-(--vf-text-inverse);
@@ -60,11 +82,53 @@
 }
 
 .vuefinder__image-preview__image-container {
-  @apply flex w-full justify-center;
+  @apply h-[50vh] w-full overflow-hidden rounded-lg bg-(--vf-bg-tertiary) p-2;
+  /* Faint checkerboard so transparent / white-edged images stand out from
+     the modal background. */
+  background-image:
+    linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--vf-bg-tertiary) 50%, transparent) 25%,
+      transparent 25%
+    ),
+    linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--vf-bg-tertiary) 50%, transparent) 25%,
+      transparent 25%
+    ),
+    linear-gradient(
+      45deg,
+      transparent 75%,
+      color-mix(in srgb, var(--vf-bg-tertiary) 50%, transparent) 75%
+    ),
+    linear-gradient(
+      -45deg,
+      transparent 75%,
+      color-mix(in srgb, var(--vf-bg-tertiary) 50%, transparent) 75%
+    );
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+}
+
+.vuefinder__image-preview__stage {
+  @apply flex h-full w-full items-center justify-center overflow-hidden;
 }
 
 .vuefinder__themer .vuefinder__image-preview__image {
-  @apply max-h-[50vh] object-contain;
+  @apply block max-h-none max-w-none object-contain transition-transform duration-150 ease-out select-none;
+  touch-action: none;
+}
+
+.vuefinder__themer .vuefinder__image-preview__image--zoomed {
+  @apply cursor-grab;
+}
+
+.vuefinder__themer .vuefinder__image-preview__image--panning {
+  @apply cursor-grabbing;
 }
 .vuefinder__themer .vuefinder__image-preview__image-container cropper-canvas {
   @apply h-full w-full;
@@ -99,34 +163,6 @@
   @apply flex flex-col;
 }
 
-.vuefinder__text-preview__header {
-  @apply -mx-3 mt-0 mb-2 flex items-center border-b border-(--vf-border-primary) px-3 py-3;
-}
-
-.vuefinder__text-preview__title {
-  @apply text-lg leading-6 font-medium text-(--vf-text-primary);
-}
-
-.vuefinder__text-preview__actions {
-  @apply ml-auto flex items-center;
-}
-
-.vuefinder__themer .vuefinder__text-preview__save-button {
-  @apply ml-1 rounded border border-transparent bg-(--vf-accent-primary) px-2 py-1 text-base font-medium text-(--vf-text-inverse) shadow-sm sm:ml-3 sm:w-auto sm:text-sm;
-}
-
-.vuefinder__themer .vuefinder__text-preview__save-button:hover {
-  @apply bg-(--vf-accent-secondary);
-}
-
-.vuefinder__themer .vuefinder__text-preview__edit-button {
-  @apply ml-1 px-2 py-1 text-(--vf-accent-primary);
-}
-
-.vuefinder__themer .vuefinder__text-preview__edit-button:hover {
-  @apply text-(--vf-accent-secondary);
-}
-
 .vuefinder__text-preview__content {
   @apply max-h-[60vh] min-h-[200px] overflow-auto rounded border border-(--vf-border-primary) bg-(--vf-bg-primary) p-2 text-xs font-normal whitespace-pre-wrap text-(--vf-text-primary);
 }
@@ -137,6 +173,150 @@
 
 .vuefinder__themer .vuefinder__text-preview__textarea:focus {
   @apply border-(--vf-accent-primary) shadow-[0_0_0_1px_var(--vf-accent-primary)];
+}
+
+.vuefinder__text-preview__body {
+  @apply min-h-[200px];
+}
+
+.vuefinder__codemirror-wrapper {
+  @apply relative;
+}
+
+.vuefinder__codemirror-wrap-toggle {
+  @apply absolute top-1 right-1 z-10 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded border border-(--vf-border-primary) bg-(--vf-bg-primary)/80 text-(--vf-text-secondary) opacity-60 backdrop-blur-sm hover:bg-(--vf-bg-secondary) hover:opacity-100;
+  transition:
+    opacity 150ms ease,
+    background-color 150ms ease;
+}
+
+.vuefinder__codemirror-wrap-toggle--active {
+  @apply text-(--vf-text-primary) opacity-100;
+}
+
+.vuefinder__codemirror-wrap-toggle svg {
+  @apply h-4 w-4;
+}
+
+.vuefinder__codemirror-editor {
+  @apply max-h-[60vh] min-h-[200px] overflow-auto rounded border border-(--vf-border-primary) bg-(--vf-bg-primary) text-(--vf-text-primary);
+}
+
+/* Read-only signals: the user shouldn't think this is an editor they
+   forgot to click into. Slightly grayer surface, slightly muted text,
+   no caret, no active-line highlight — reads as "preview" not "editor". */
+.vuefinder__codemirror-editor--readonly {
+  background: var(--vf-bg-secondary);
+}
+
+.vuefinder__codemirror-editor--readonly .cm-scroller,
+.vuefinder__codemirror-editor--readonly .cm-content {
+  background: var(--vf-bg-secondary);
+}
+
+.vuefinder__codemirror-editor--readonly .cm-content {
+  color: var(--vf-text-secondary);
+  caret-color: transparent;
+}
+
+.vuefinder__codemirror-editor--readonly .cm-cursor,
+.vuefinder__codemirror-editor--readonly .cm-activeLine,
+.vuefinder__codemirror-editor--readonly .cm-activeLineGutter {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.vuefinder__codemirror-editor--readonly .cm-gutters {
+  background: var(--vf-bg-tertiary);
+  color: var(--vf-text-tertiary, var(--vf-text-secondary));
+}
+
+.vuefinder__codemirror-editor .cm-editor {
+  @apply h-full text-xs;
+}
+
+.vuefinder__codemirror-editor .cm-editor.cm-focused {
+  outline: 1px solid var(--vf-accent-primary);
+}
+
+.vuefinder__codemirror-editor .cm-scroller {
+  font-family:
+    'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+}
+
+/* iOS Safari auto-zooms when a contenteditable has font-size < 16px.
+   Keep the editor readable at the desktop size but bump mobile to 16px. */
+@media (max-width: 640px) {
+  .vuefinder__codemirror-editor .cm-content {
+    font-size: 16px;
+  }
+}
+
+.vuefinder__codemirror-editor .cm-gutters {
+  @apply border-r border-(--vf-border-primary) bg-(--vf-bg-secondary) text-(--vf-text-secondary);
+}
+
+/* CSV preview — table mode */
+.vuefinder__csv-preview__view-checkbox {
+  @apply mt-2 inline-flex cursor-pointer items-center gap-2 text-xs text-(--vf-text-secondary);
+}
+
+.vuefinder__themer .vuefinder__csv-preview__view-checkbox input {
+  @apply relative h-3.5 w-3.5 cursor-pointer appearance-none rounded border border-(--vf-border-primary) bg-(--vf-bg-primary);
+  accent-color: var(--vf-accent-primary);
+}
+
+.vuefinder__themer .vuefinder__csv-preview__view-checkbox input:checked {
+  @apply border-(--vf-accent-primary) bg-[length:10px_10px] bg-center bg-no-repeat;
+  background-color: var(--vf-accent-primary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M8.5 2.5L4 7L1.5 4.5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+}
+
+.vuefinder__themer .vuefinder__csv-preview__view-checkbox input:focus {
+  @apply opacity-100 outline-none;
+  box-shadow: 0 0 0 2px var(--vf-accent-primary);
+}
+
+.vuefinder__themer .vuefinder__csv-preview__view-checkbox input:hover:not(:checked) {
+  @apply border-(--vf-accent-primary) opacity-60;
+}
+
+.vuefinder__csv-preview__table-wrap {
+  @apply max-h-[60vh] min-h-[200px] overflow-auto rounded border border-(--vf-border-primary) bg-(--vf-bg-primary);
+}
+
+.vuefinder__csv-preview__table {
+  @apply min-w-full border-collapse text-xs;
+}
+
+.vuefinder__themer .vuefinder__csv-preview__table thead {
+  @apply sticky top-0 z-10 bg-(--vf-bg-secondary);
+}
+
+.vuefinder__themer .vuefinder__csv-preview__table th,
+.vuefinder__themer .vuefinder__csv-preview__table td {
+  @apply max-w-[24rem] truncate border-b border-(--vf-border-primary) px-2 py-1 text-left align-top whitespace-nowrap text-(--vf-text-primary);
+}
+
+.vuefinder__themer .vuefinder__csv-preview__table th {
+  @apply font-medium text-(--vf-text-secondary);
+}
+
+.vuefinder__themer .vuefinder__csv-preview__table tbody tr:hover {
+  @apply bg-(--vf-bg-hover);
+}
+
+.vuefinder__themer .vuefinder__csv-preview__row-num {
+  @apply sticky left-0 z-[5] w-12 min-w-12 border-r border-(--vf-border-primary) bg-(--vf-bg-secondary) text-right text-(--vf-text-secondary) tabular-nums;
+}
+
+.vuefinder__csv-preview__truncated {
+  @apply px-3 py-2 text-center text-xs text-(--vf-text-secondary);
+}
+
+.vuefinder__csv-preview__error,
+.vuefinder__csv-preview__empty {
+  @apply max-h-[60vh] min-h-[200px] rounded border border-(--vf-border-primary) bg-(--vf-bg-primary) p-4 text-center text-sm text-(--vf-text-secondary);
 }
 
 /** Video Preview */

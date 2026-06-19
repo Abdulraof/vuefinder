@@ -1,5 +1,13 @@
 import { defineConfig } from 'vitepress';
-import { writeFileSync, readdirSync, statSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import {
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+} from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 
 // Generate sitemap XML from VitePress pages
@@ -50,8 +58,6 @@ function generateSitemap(pages: string[], baseUrl: string): string {
         priority = '0.8';
       } else if (url.startsWith('/examples/')) {
         priority = '0.7';
-      } else if (url.startsWith('/migration/')) {
-        priority = '0.6';
       }
 
       return `  <url>
@@ -72,6 +78,7 @@ ${urls}
 // outDir is relative to the VitePress project root (docs/ folder)
 // So '../public' means: from docs/ go up one level to project root, then into public/
 const baseUrl = 'https://vuefinder.ozdemir.be';
+const pkg = JSON.parse(readFileSync(resolve(__dirname, '..', '..', 'package.json'), 'utf-8'));
 const siteTitle = 'VueFinder - Vue File Manager';
 const siteDescription = 'A sleek, developer-friendly file manager for Vue.js. Organize, preview, and manage files with ease. Full-featured with upload, download, rename, delete, archive, search, and preview capabilities.';
 
@@ -155,7 +162,7 @@ gtag('config', 'G-6BYQESCJ6R');`
         },
         license: 'https://opensource.org/licenses/MIT',
         codeRepository: 'https://github.com/n1crack/vuefinder',
-        softwareVersion: '4.0.15',
+        softwareVersion: pkg.version,
         programmingLanguage: 'TypeScript',
         runtimePlatform: 'Vue.js 3'
       })
@@ -200,25 +207,8 @@ gtag('config', 'G-6BYQESCJ6R');`
       console.log('🔗 Sample URLs:', urlMatches.slice(0, 3).map(m => m.replace(/<\/?loc>/g, '')));
     }
     
-    // Copy robots.txt from public folder to output directory
-    const robotsSourcePath = resolve(__dirname, 'public', 'robots.txt');
-    const robotsDestPath = resolve(outDir, 'robots.txt');
-    if (existsSync(robotsSourcePath)) {
-      copyFileSync(robotsSourcePath, robotsDestPath);
-      console.log('✅ robots.txt copied to', robotsDestPath);
-    } else {
-      console.warn('⚠️  robots.txt not found at', robotsSourcePath);
-    }
-
-    // Copy OG image from public folder to output directory
-    const ogImageSourcePath = resolve(__dirname, 'public', 'vuefinder_preview.png');
-    const ogImageDestPath = resolve(outDir, 'vuefinder_preview.png');
-    if (existsSync(ogImageSourcePath)) {
-      copyFileSync(ogImageSourcePath, ogImageDestPath);
-      console.log('✅ OG image copied to', ogImageDestPath);
-    } else {
-      console.warn('⚠️  OG image not found at', ogImageSourcePath);
-    }
+    // Static brand assets (favicon, logo, OG image, robots.txt) live in
+    // docs/public/ and are auto-copied to outDir by VitePress.
 
     // Copy OpenAPI YAML file to api-reference directory in output
     const yamlSourcePath = resolve(__dirname, '..', 'api-reference', 'openapi.yaml');
@@ -234,11 +224,11 @@ gtag('config', 'G-6BYQESCJ6R');`
   },
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
+    logo: '/logo.svg',
     nav: [
       { text: 'Guide', link: '/getting-started/introduction' },
       { text: 'API Reference', link: '/api-reference/props' },
       { text: 'Examples', link: '/examples/basic-usage' },
-      { text: 'Migration', link: '/migration/from-2-7-to-4-0' },
     ],
 
     sidebar: {
@@ -318,15 +308,6 @@ gtag('config', 'G-6BYQESCJ6R');`
             { text: 'Types', link: '/api-reference/types' },
             { text: 'Drivers Interface', link: '/api-reference/drivers-interface' },
             { text: 'OpenAPI Specification', link: '/api-reference/openapi' },
-          ],
-        },
-      ],
-      '/migration/': [
-        {
-          text: 'Migration',
-          items: [
-            { text: 'From 2.7 to 4.0', link: '/migration/from-2-7-to-4-0' },
-            { text: 'Breaking Changes', link: '/migration/breaking-changes' },
           ],
         },
       ],

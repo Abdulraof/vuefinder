@@ -305,6 +305,14 @@
   @apply h-full w-full stroke-current;
 }
 
+.vuefinder__search-modal__result-pin {
+  @apply mr-1 inline-block h-3.5 w-3.5 shrink-0 align-text-bottom text-amber-600;
+}
+
+.vuefinder__search-modal__result-pin svg {
+  @apply h-full w-full;
+}
+
 .vuefinder__search-modal__result-content {
   @apply flex min-w-0 flex-1 flex-col gap-1;
 }

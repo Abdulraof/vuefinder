@@ -9,8 +9,12 @@ import type {
   FileContentResult,
   DeleteParams,
   ArchiveParams,
+  UnarchiveParams,
   SaveParams,
   UploaderContext,
+  ListParams,
+  SearchParams,
+  GetContentParams,
 } from './types';
 import { parseBackendError } from './types';
 import type Uppy from '@uppy/core';
@@ -120,6 +124,10 @@ export class RemoteDriver extends BaseAdapter {
       const errorMessage = parseBackendError(text, response.status, response.statusText);
       throw new Error(errorMessage);
     }
+    // No Content / Not Modified: no body to parse (e.g. 204 from a direct S3 upload)
+    if (response.status === 204 || response.status === 304) {
+      return {} as T;
+    }
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
       return await response.json();
@@ -128,13 +136,13 @@ export class RemoteDriver extends BaseAdapter {
     return await response.text();
   }
 
-  async list(params?: { path?: string }): Promise<FsData> {
+  async list(params?: ListParams): Promise<FsData> {
     const queryParams = new URLSearchParams();
     if (params?.path) queryParams.append('path', params.path);
     const url = queryParams.toString()
       ? `${this.config.url.list}?${queryParams.toString()}`
       : this.config.url.list;
-    return await this.request<FsData>(url, { method: 'GET' });
+    return await this.request<FsData>(url, { method: 'GET', signal: params?.signal });
   }
 
   async delete(params: DeleteParams): Promise<DeleteResult> {
@@ -199,16 +207,27 @@ export class RemoteDriver extends BaseAdapter {
     this.validateParam(params.path, 'path');
     return await this.request<FileOperationResult>(this.config.url.archive, {
       method: 'POST',
-      body: JSON.stringify({ items: params.items, path: params.path, name: params.name }),
+      body: JSON.stringify({
+        items: params.items,
+        path: params.path,
+        name: params.name,
+        // Optional. Backends that ignore unknown fields will fall back to `path`.
+        ...(params.destination ? { destination: params.destination } : {}),
+      }),
     });
   }
 
-  async unarchive(params: { item: string; path: string }): Promise<FileOperationResult> {
+  async unarchive(params: UnarchiveParams): Promise<FileOperationResult> {
     this.validateParam(params.item, 'item');
     this.validateParam(params.path, 'path');
     return await this.request<FileOperationResult>(this.config.url.unarchive, {
       method: 'POST',
-      body: JSON.stringify({ item: params.item, path: params.path }),
+      body: JSON.stringify({
+        item: params.item,
+        path: params.path,
+        // Optional. Backends that ignore unknown fields will fall back to `path`.
+        ...(params.destination ? { destination: params.destination } : {}),
+      }),
     });
   }
 
@@ -236,11 +255,11 @@ export class RemoteDriver extends BaseAdapter {
     return `${this.config.baseURL}${this.config.url.preview}?${queryParams.toString()}`;
   }
 
-  async getContent(params: { path: string }): Promise<FileContentResult> {
+  async getContent(params: GetContentParams): Promise<FileContentResult> {
     this.validatePath(params.path);
     const queryParams = new URLSearchParams({ path: params.path });
     const url = `${this.config.baseURL}${this.config.url.preview}?${queryParams.toString()}`;
-    const response = await fetch(url, { headers: this.getHeaders() });
+    const response = await fetch(url, { headers: this.getHeaders(), signal: params.signal });
     if (!response.ok) {
       const text = await response.text();
       const errorMessage = parseBackendError(text, response.status, response.statusText);
@@ -256,12 +275,7 @@ export class RemoteDriver extends BaseAdapter {
     return `${this.config.baseURL}${this.config.url.download}?${queryParams.toString()}`;
   }
 
-  async search(params: {
-    path?: string;
-    filter: string;
-    deep?: boolean;
-    size?: 'all' | 'small' | 'medium' | 'large';
-  }): Promise<import('../types').DirEntry[]> {
+  async search(params: SearchParams): Promise<import('../types').DirEntry[]> {
     const base = this.config.url.search;
     const query = new URLSearchParams();
     if (params.path) query.set('path', params.path);
@@ -271,6 +285,7 @@ export class RemoteDriver extends BaseAdapter {
     const url = query.toString() ? `${base}?${query.toString()}` : base;
     const data = await this.request<{ files: import('../types').DirEntry[] }>(url, {
       method: 'GET',
+      signal: params.signal,
     });
     return data.files || [];
   }
@@ -281,6 +296,7 @@ export class RemoteDriver extends BaseAdapter {
       method: 'POST',
       body: JSON.stringify({ path: params.path, content: params.content }),
       headers: this.getHeaders(),
+      signal: params.signal,
     });
   }
 }

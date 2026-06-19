@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, nextTick, watch, onUnmounted } from 'vue';
+import { computed, ref, nextTick, watch, onUnmounted } from 'vue';
 import { useApp } from '../../composables/useApp';
+import { useFeature } from '../../composables/useFeature';
+import { useStore } from '@nanostores/vue';
 import { computePosition, flip, shift, offset, autoUpdate } from '@floating-ui/dom';
 import { shortenPath } from '../../utils/path.ts';
 import { copyPath } from '../../utils/clipboard.ts';
@@ -9,7 +11,10 @@ import FileSVG from '../../assets/icons/file.svg';
 import CopySVG from '../../assets/icons/copy.svg';
 import FolderSVG from '../../assets/icons/folder.svg';
 import DotsSVG from '../../assets/icons/dots.svg';
+import PinSVG from '../../assets/icons/pin.svg';
 import type { DirEntry } from '../../types.ts';
+import type { ConfigState } from '../../stores/config';
+import type { StoreValue } from 'nanostores';
 
 defineOptions({ name: 'SearchResultItem' });
 
@@ -30,7 +35,9 @@ interface Emits {
   (e: 'update:selectedItemDropdownOption', value: string | null): void;
   (e: 'copyPath', item: DirEntry): void;
   (e: 'openContainingFolder', item: DirEntry): void;
+  (e: 'open', item: DirEntry): void;
   (e: 'preview', item: DirEntry): void;
+  (e: 'activate', item: DirEntry): void;
 }
 
 const props = defineProps<Props>();
@@ -38,6 +45,25 @@ const emit = defineEmits<Emits>();
 
 const app = useApp();
 const { t } = app.i18n;
+const { enabled } = useFeature();
+const configState: StoreValue<ConfigState> = useStore(app.config.state);
+
+const pinEnabled = computed(() => enabled('pinned'));
+const isPinned = computed(() =>
+  configState.value.pinnedFolders.some((f: DirEntry) => f.path === props.item.path)
+);
+
+const togglePin = (item: DirEntry) => {
+  const current = app.config.get('pinnedFolders');
+  if (current.some((f: DirEntry) => f.path === item.path)) {
+    app.config.set(
+      'pinnedFolders',
+      current.filter((f: DirEntry) => f.path !== item.path)
+    );
+  } else {
+    app.config.set('pinnedFolders', [...current, item]);
+  }
+};
 
 // Store button element reference for positioning
 const buttonElementRef = ref<HTMLElement | null>(null);
@@ -317,6 +343,10 @@ const previewItem = (item: DirEntry) => {
   emit('preview', item);
 };
 
+const openItem = (item: DirEntry) => {
+  emit('open', item);
+};
+
 // Enhanced keyboard navigation for item dropdowns
 const handleDropdownKeydown = (e: KeyboardEvent) => {
   if (!props.activeDropdown) return;
@@ -365,6 +395,7 @@ const handleDropdownKeydown = (e: KeyboardEvent) => {
     :class="{ 'vuefinder__search-modal__result-item--selected': index === selectedIndex }"
     :title="item.basename"
     @click="emit('select', index)"
+    @dblclick.stop="emit('activate', item)"
   >
     <div class="vuefinder__search-modal__result-icon">
       <FolderSVG v-if="item.type === 'dir'" />
@@ -372,6 +403,11 @@ const handleDropdownKeydown = (e: KeyboardEvent) => {
     </div>
     <div class="vuefinder__search-modal__result-content">
       <div class="vuefinder__search-modal__result-name">
+        <PinSVG
+          v-if="item.type === 'dir' && pinEnabled && isPinned"
+          class="vuefinder__search-modal__result-pin"
+          :title="t('Pinned')"
+        />
         {{ item.basename }}
         <span v-if="formatFileSize(item)" class="vuefinder__search-modal__result-size">
           {{ formatFileSize(item) }}
@@ -443,6 +479,39 @@ const handleDropdownKeydown = (e: KeyboardEvent) => {
             <span>{{ t('Open Containing Folder') }}</span>
           </div>
           <div
+            v-if="item.type === 'dir'"
+            class="vuefinder__search-modal__item-dropdown-option"
+            :class="{
+              'vuefinder__search-modal__item-dropdown-option--selected':
+                selectedItemDropdownOption === `open-${item.path}`,
+            }"
+            @click="
+              selectItemDropdownOption(`open-${item.path}`);
+              openItem(item);
+            "
+            @focus="selectItemDropdownOption(`open-${item.path}`)"
+          >
+            <FolderSVG class="vuefinder__search-modal__item-dropdown-icon" />
+            <span>{{ t('Open') }}</span>
+          </div>
+          <div
+            v-if="item.type === 'dir' && pinEnabled"
+            class="vuefinder__search-modal__item-dropdown-option"
+            :class="{
+              'vuefinder__search-modal__item-dropdown-option--selected':
+                selectedItemDropdownOption === `pin-${item.path}`,
+            }"
+            @click="
+              selectItemDropdownOption(`pin-${item.path}`);
+              togglePin(item);
+            "
+            @focus="selectItemDropdownOption(`pin-${item.path}`)"
+          >
+            <PinSVG class="vuefinder__search-modal__item-dropdown-icon" />
+            <span>{{ isPinned ? t('Unpin Folder') : t('Pin Folder') }}</span>
+          </div>
+          <div
+            v-else
             class="vuefinder__search-modal__item-dropdown-option"
             :class="{
               'vuefinder__search-modal__item-dropdown-option--selected':

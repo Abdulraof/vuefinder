@@ -5,9 +5,13 @@ import type {
   FileOperationResult,
   FileContentResult,
   ArchiveParams,
+  UnarchiveParams,
   SaveParams,
   RenameParams,
   TransferParams,
+  ListParams,
+  SearchParams,
+  GetContentParams,
 } from './types';
 import type { DirEntry, FsData } from '../types';
 
@@ -246,10 +250,10 @@ export class ArrayDriver extends BaseAdapter {
       storages: this.storages,
       read_only: this.readOnly,
       dirname: dirnameFull,
-    } as unknown as FileOperationResult;
+    };
   }
 
-  async list(params?: { path?: string }): Promise<FsData> {
+  async list(params?: ListParams): Promise<FsData> {
     const dirnameFull = this.normalizePath(params?.path);
     return {
       storages: this.storages,
@@ -509,7 +513,7 @@ export class ArrayDriver extends BaseAdapter {
     return this.resultForDir(dir);
   }
 
-  async unarchive(params: { item: string; path: string }): Promise<FileOperationResult> {
+  async unarchive(params: UnarchiveParams): Promise<FileOperationResult> {
     this.ensureWritable();
     this.validateParam(params.item, 'item');
     this.validateParam(params.path, 'path');
@@ -552,7 +556,7 @@ export class ArrayDriver extends BaseAdapter {
     return '';
   }
 
-  async getContent(params: { path: string }): Promise<FileContentResult> {
+  async getContent(params: GetContentParams): Promise<FileContentResult> {
     this.validatePath(params.path);
     const normalizedPath = this.normalizePath(params.path);
     const value = this.contentStore.get(normalizedPath);
@@ -577,12 +581,7 @@ export class ArrayDriver extends BaseAdapter {
     return '';
   }
 
-  async search(params: {
-    path?: string;
-    filter: string;
-    deep?: boolean;
-    size?: 'all' | 'small' | 'medium' | 'large';
-  }): Promise<DirEntry[]> {
+  async search(params: SearchParams): Promise<DirEntry[]> {
     const filter = (params.filter || '').toLowerCase();
     const base = params.path ? this.normalizePath(params.path) : undefined;
 
